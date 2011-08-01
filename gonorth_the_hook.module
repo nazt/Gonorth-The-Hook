@@ -1,0 +1,397 @@
+<?php
+/**
+ * Implementation of hook_init()
+ */
+function gonorth_the_hook_init() {
+}
+
+/**
+ * Implementation of hook_exit()
+ */
+function gonorth_the_hook_exit() {
+}
+/**
+ * Implementation of hook_perms()
+ */
+
+function gonorth_the_hook_perm() {
+  return array('access gonorth statistics');
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function gonorth_the_hook_menu() {
+  $items = array();
+  $items['gonorth/autocomplete'] = array(
+    'title' => 'Gonorth autocomplete',
+    'page callback' => 'gonorth_the_hook_autocomplete',
+    'access callback' => 'gonorth_the_hook_autocomplete_access',
+    'access arguments' => array(2),
+    'type' => MENU_CALLBACK
+  );
+  $items['gonorth/autocomplete/%/%/%/%'] = array(
+    'title' => 'Gonorth autocomplete',
+    'page callback' => 'gonorth_the_hook_autocomplete_with_type',
+    'access callback' => 'gonorth_the_hook_autocomplete_access',
+    'page arguments' => array(2, 3, 4, 5),
+    'access arguments' => array(2),
+    'type' => MENU_CALLBACK
+  );
+  $items['facebook/profile/place/%/comments'] = array(
+    'title' => 'Comments',
+    'page callback' => 'gonorth_the_hook_place_comments',
+    'page arguments' => array(3),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK
+  );
+  $items['facebook/profile/autocomplete/buddies'] = array(
+    'title' => 'Get Buddies',
+    'page callback' => 'gonorth_the_hook_get_buddies',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK
+  );
+  $items['stat/travel_style'] = array(
+    'title' => 'Travelling Style',
+    'page callback' => 'stat_travelling',
+    'access arguments' => array('access gonorth statistics'),
+    'type' => MENU_CALLBACK
+  );
+  $items['stat/place/visitted'] = array(
+    'title' => 'Stat Visitted',
+    'page callback' => 'stat_place_had_visitted',
+    'access arguments' => array('access gonorth statistics'),
+    'type' => MENU_CALLBACK
+  );
+
+  return $items;
+}
+
+/**
+ * Check access to the menu callback of the autocomplete widget.
+ *
+ * Check for both 'edit' and 'view' access in the unlikely event
+ * a user has edit but not view access.
+ */
+function gonorth_the_hook_autocomplete_access($field_name) {
+  return (true || user_access('access content') && ($field = content_fields($field_name)) && isset($field['field_name']) && content_access('view', $field) && content_access('edit', $field));
+}
+
+
+function gonorth_the_hook_form_alter(&$form, &$form_state, $form_id) {
+  switch($form_id) {
+    case 'od_questionair_node_form':
+      drupal_set_title("เข้าร่วมกิจกรรมเดินทางกับชุมชนคนเที่ยวเหนือครั้งที่ 2 (สุโขทัย)");
+      session_start();
+      $tree_north = (array)taxonomy_get_tree(3, 53);
+      $idx = rand(0, sizeof($tree_north));
+
+      $tid = $tree_north[$idx]->tid;
+      $form['taxonomy'][3]['#default_value'] =  $tid;
+      $form['taxonomy'][3]['#access'] = false;
+      $key = md5(time());
+
+      $form_state['csrf_key'] = $key;
+      $form['field_csrf'][0]['#default_value']['value'] =  $key;
+      $form['field_csrf']['#access'] =  false;
+
+      $form_state['term_id'] = $tid;
+
+      $_SESSION['csrf_questionair'] = $key;
+      $form['#submit'][] = 'gonorth_questionair_submit';
+
+    break;
+    case 'content_profile_node_form':
+    case 'travel_log_node_form':
+    case 'travel_plan_node_form':
+      if ($form_id == 'content_profile_node_form') {
+        $form['taxonomy']['#prefix'] = "<div class = 'profile-taxonomy'>";
+        $form['taxonomy']['#suffix'] = "</div>";
+        $form['taxonomy'][3]['#title'] = 'จังหวัดที่อยู่ปัจจุบัน';
+
+        if (!empty($_GET['alert'])) {
+          drupal_set_message('กรุณากรอกข้อมูลส่วนตัวให้ครบก่อน');
+        }
+      }
+      else if ($form_id == 'travel_plan_node_form' || $form_id == 'travel_log_node_form') {
+        $mpath = drupal_get_path('module', 'gonorth_the_hook');
+        drupal_add_js($mpath . '/js/day_plan.js');
+        // Add facebook friends selector to node.
+        if ($form_id == 'travel_log_node_form') {
+          $_SESSION['gonorth_profile_come_from'] = 'travel_log';
+          $api_key = variable_get('facebook_startup_kit_app_api_key', '');
+          drupal_add_js($mpath . '/js/jquery.facebook.multifriend.select.js');
+          drupal_add_css($mpath . '/css/jquery.facebook.multifriend.select.css');
+          drupal_add_js($mpath . '/js/add_travel_log.js');
+          drupal_add_js(array('fb_startup_kit' => array('apikey'  => $api_key)), 'setting');
+          $form['multi_friend_select'] = array(
+            '#value' => '
+              <div id="facebook-multifriends-selectoin">
+                  <div id="selected-friends-lable">เพื่อนร่วมทาง: </div>
+                  <div id="selected-friends" style="height:30px"></div>
+                  <div id="jfmfs-container"></div>
+              </div>
+            ',
+            '#weight' => -1.9,
+          );
+          drupal_set_title('เขียนบันทึกการเดินทาง');
+        }
+        elseif ($form_id == 'travel_plan_node_form') {
+          drupal_set_title('วางเส้นทาง');
+        }
+        // Change 'Add another item' button for Day Plan.
+        $form['field_day_plan']['field_day_plan_add_more']['#value'] = 'เพิ่มวันเดินทาง';
+      }
+
+      $destination = $_GET['destination'];
+      if (empty($destination)) {
+        $destination = 'facebook/profile';
+      }
+      $form['buttons']['preview'] = array(
+        '#type' => 'markup',
+        '#value' =>  l(t('Cancel'), $destination, array('attributes' => array('id' => 'edit-cancel'))),
+        '#weight' => 21,
+      );
+    break;
+    default :
+      break;
+  }
+}
+
+function gonorth_questionair_submit(&$form, &$form_state) {
+  $tid = $form_state['term_id'];
+  $key = $form_state['csrf_key'];
+  $email = $form_state['values']['field_email'][0]['email'];
+}
+function gonorth_the_hook_form_travel_plan_node_form_alter(&$form, &$form_state) {
+  $module_path = drupal_get_path('module', 'gonorth_the_hook');
+}
+
+function gonorth_the_hook_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  if ($op == 'insert') {
+    if (empty($node->field_day_plan) && $node->type == 'tourist_attraction') {
+      $node->type = 'text';
+    }
+    else if ($node->type == 'travel_log') {
+      //In Gonorth Module
+    }
+  }
+
+  if ($node->type == 'od_questionair') {
+    if($op == 'insert') {
+      $tid = $node->taxonomy[3];
+      $email = $node->field_email[0]['email'];
+      $key = $node->field_csrf[0]['value'];
+      $nid = $node->nid;
+      drupal_goto('trip2/form/completed', 'tid='. $tid . '&key='. $key . '&email=' . $email . '&nid='. $nid);
+    }
+    // Access denied to other people.people
+    else if ($op == 'view') {
+      if (!user_access('edit any od_questionair content')) {
+        drupal_access_denied();
+        exit(0);
+      }
+    }
+  }
+  // Handle travel plan & log is deleted. Go to facebook/profile.
+  else if (($node->type == 'travel_log' || $node->type == 'travel_plan') && $op == 'delete') {
+    unset($_REQUEST['destination']);
+    drupal_goto('facebook/profile');
+  }
+}
+
+function gonorth_the_hook_field($op, &$node, $field, &$items, $teaser, $page) {
+  dpm('x-'.$op);
+  dpm($node);
+}
+
+/**
+ * Menu callback; Retrieve a pipe delimited string of autocomplete suggestions for existing users
+ */
+function gonorth_the_hook_autocomplete($field_name, $string = '', $type = '') {
+  $fields = content_fields();
+  $field = $fields[$field_name];
+  $match = isset($field['widget']['autocomplete_match']) ? $field['widget']['autocomplete_match'] : 'contains';
+  $matches = array();
+
+  $references = _nodereference_potential_references($field, $string, $match, array(), 10);
+  //dpm('string---'. $string);
+  foreach ($references as $id => $row) {
+    //NAzT Filter Type
+    $node = node_load($id);
+    if ($terms = taxonomy_node_get_terms_by_vocabulary($node, 3)) {
+      $province = array_pop($terms);
+      $row['rendered'] .= ' ('. $province->name .')';
+    }
+    $matches[$row['title'] ." [nid:$id]"] = '<div class="reference-autocomplete">'. $row['rendered'] . '</div>';
+  }
+  drupal_json($matches);
+}
+
+/**
+ * Menu callback; Retrieve a pipe delimited string of autocomplete suggestions for existing users
+ */
+function gonorth_the_hook_autocomplete_with_type($prefix, $type = '', $field_name, $string = '') {
+  $fields = content_fields();
+  $field = $fields[$field_name];
+  $match = isset($field['widget']['autocomplete_match']) ? $field['widget']['autocomplete_match'] : 'contains';
+  $matches = array();
+
+  $references = _nodereference_potential_references($field, $string, $match, array(), 10);
+  foreach ($references as $nid => $row) {
+    //NAzT Filter Type
+    $sql = "SELECT vid, type FROM {node} WHERE nid = %d";
+    $node = db_fetch_object(db_query($sql, $nid));
+    if ($node->type == $type) {
+      if ($terms = taxonomy_node_get_terms_by_vocabulary($node, 3)) {
+        $province = array_pop($terms);
+        $row['rendered'] .= ' ('. $province->name .')';
+      }
+      // Add a class wrapper for a few required CSS overrides.
+      $matches[$row['title'] ." [nid:$nid]"] = '<div class="reference-autocomplete">'. $row['rendered'] . '</div>';
+    }
+  }
+
+  //$matches = array($type, $field_name, $string);
+  drupal_json($matches);
+}
+
+/**
+ * Comment Page for popup
+ */
+function gonorth_the_hook_place_comments($nid) {
+  $url = url('facebook/profile/place/'. $nid , array('absolute' => true));
+  return  "<fb:comments href=\"$url\" num_posts=\"2\" width=\"500\"></fb:comments>";
+}
+
+/**
+ * get buddies page but not use.!
+ */
+function gonorth_the_hook_get_buddies($friend_name = "") {
+  require_once(drupal_get_path('module', 'fb_startup_kit') . '/lib/php-sdk/src/facebook.php');
+
+  $api_key = variable_get('facebook_startup_kit_app_api_key', '');
+  $secret_key = variable_get('facebook_startup_kit_app_secret_key', '');
+  $app_id = variable_get('facebook_startup_kit_app_id', '');
+  $page_id = variable_get('facebook_startup_kit_page_id', '');
+
+
+  // Create our Application instance (replace this with your appId and secret).
+  $facebook = new Facebook(array(
+    'appId'  => $app_id,
+    'secret' => $secret_key,
+  ));
+  session_start();
+  $facebook->setAccessToken($_SESSION['fb_access_token']);
+  // Get User ID
+  $fb_user = $facebook->getUser();
+
+  // Login or logout url will be needed depending on current user state.
+  if ($fb_user) {
+    try {
+      // Proceed knowing you have a logged in user who's authenticated.
+      $user_profile = $facebook->api('/me');
+      $friends = $facebook->api("/me/friends");
+      $fbuids = array();
+      foreach ($friends['data'] as $delta => $friend) {
+        $fbuids[$friend['id']] = $friend['id'];
+      }
+      print_r($fbuids);
+    } catch (FacebookApiException $e) {
+      return 'eerror';
+      $fb_user = null;
+      $friends = null;
+    }
+  }
+  print 'aaa'. $fb_user;
+}
+
+/**
+ * page callback for hook_menu: stat/travel_style
+ */
+function stat_travelling() {
+  function cmp($a, $b) {
+      if ($a[1] == $b[1]) {
+          return 0;
+      }
+      return ($b[1] < $a[1]) ? -1 : 1;
+  }
+
+  // hardcode vid = 4 for travel style.
+  $terms  = taxonomy_get_tree(4);
+  $counter = array();
+  $header = array(t('Travelling Style'), t('People'));
+  $total_terms = count($terms);
+  $data = array();
+  $to_sort = array();
+  for ($i = 0 ; $i < $total_terms ; $i++) {
+    $counter = taxonomy_term_count_nodes($terms[$i]->tid);
+    $data[$i] = array($terms[$i]->name, $counter);
+    $to_sort[$i] = $counter;
+  }
+  usort($data, 'cmp');
+  $output = theme_table($header, $data);
+  return $output;
+}
+
+/**
+ * page callback for hook_menu: stat/place/visitted/%
+ */
+function stat_place_had_visitted($node_type = 'travel_plan') {
+  $query = get_query_with('%s');
+  $result = db_query($query, $node_type);
+  $data = array();
+  while($rows = db_fetch_object($result)) {
+    if(!empty($rows->title)) {
+      $data[] = array($rows->title, $rows->count);
+    }
+  }
+
+  $header = array(t('Place'), t('Count'));
+  $output = theme_table($header, $data);
+
+  return $output;
+
+}
+
+/**
+ * Helper function to prepare sql query for travel(log|plan)
+ */
+function get_query_with($node_type) {
+  $query = <<<QUERY
+SELECT
+  node.nid AS nid,
+  node.type AS node_type,
+  node.vid AS node_vid,
+  field_tourist_attraction_nid,
+  node_node_data_field_tourist_attraction.title,
+  count(field_tourist_attraction_nid) as count
+FROM node node
+
+LEFT JOIN
+  content_field_day_plan node_data_field_day_plan
+    ON
+  node.vid = node_data_field_day_plan.vid
+
+LEFT JOIN
+  flexifield_items flexifield_items_node_data_field_day_plan
+    ON
+  node_data_field_day_plan.field_day_plan_item_id = flexifield_items_node_data_field_day_plan.item_id
+
+LEFT JOIN
+  content_field_tourist_attraction flexifield_items_node_data_field_day_plan_node_data_field_tourist_attraction
+    ON
+  flexifield_items_node_data_field_day_plan.item_id = flexifield_items_node_data_field_day_plan_node_data_field_tourist_attraction.vid
+
+LEFT JOIN
+  node node_node_data_field_tourist_attraction
+    ON
+  flexifield_items_node_data_field_day_plan_node_data_field_tourist_attraction.field_tourist_attraction_nid = node_node_data_field_tourist_attraction.nid
+
+WHERE node.type = '$node_type'
+GROUP BY field_tourist_attraction_nid
+ORDER BY count DESC
+QUERY;
+
+  return $query;
+}

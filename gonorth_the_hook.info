@@ -1,0 +1,5 @@
+name = Gonorth The Hook 
+description = Gonorth The Hook 
+version = 6.x-0.1-alpha
+core = 6.x
+package = GoNorth
