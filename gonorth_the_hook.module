@@ -153,6 +153,16 @@ function gonorth_the_hook_form_alter(&$form, &$form_state, $form_id) {
         '#weight' => 21,
       );
     break;
+    case 'pai_questionair_node_form':
+      drupal_set_title("แบบสอบถามเที่ยวปาย");
+      $form['field_pai_picture']['#title'] = 'ข้อสุดท้าย... เราอยากเห็นรูป "ปาย" ที่คุณประทับใจ หรือไม่ประทับใจ จะถ่ายเองหรือใครถ่ายไม่สำคัญ เราแค่อยากเห็น "มุม" ที่คุณ "มอง" ปาย';
+      $form['field_pai_picture'][0]['#title'] = $form['field_pai_picture']['#title'];
+
+      $form['field_save_the_pai']['#title'] = "ถ้าเราจะพาคุณไป \"รัก(ษ์)ปาย\" กิจกรรมแบบไหนที่คุณคิดว่าคนชอบเที่ยวอย่างเราๆ จะทำได้ง่ายๆ แต่ไม่ซ้ำแบบใคร ที่สำคัญ... สามารถช่วยตามหาปายที่หายไป ให้กลับคืนมา";
+      $form['field_save_the_pai'][0]['#title'] = $form['field_save_the_pai']['#title'];
+      $form['#redirect'] = 'register/done';
+    break;
+
     default :
       break;
   }
@@ -197,6 +207,14 @@ function gonorth_the_hook_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   else if (($node->type == 'travel_log' || $node->type == 'travel_plan') && $op == 'delete') {
     unset($_REQUEST['destination']);
     drupal_goto('facebook/profile');
+  }
+  else if ($node->type == 'pai_questionair') {
+    if($op == 'view') {
+      if (!user_access('edit any pai_questionair content')) {
+        drupal_access_denied();
+        exit(0);
+      }
+    }
   }
 }
 
