@@ -1,4 +1,5 @@
 $(document).ready(function(){
+  if (jQuery('.content-multiple-table').length === 2) { jQuery('.handle').eq(0).hide() }
   $('.reference-autocomplete').live('click', function(e) {
     insert_comment_link($(this).closest('#autocomplete').siblings('input'));
   });

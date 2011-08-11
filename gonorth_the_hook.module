@@ -105,6 +105,7 @@ function gonorth_the_hook_form_alter(&$form, &$form_state, $form_id) {
     case 'travel_log_node_form':
     case 'travel_plan_node_form':
       if ($form_id == 'content_profile_node_form') {
+        $form['body_field']['body']['#rows'] = 5;
         $form['taxonomy']['#prefix'] = "<div class = 'profile-taxonomy'>";
         $form['taxonomy']['#suffix'] = "</div>";
         $form['taxonomy'][3]['#title'] = 'จังหวัดที่อยู่ปัจจุบัน';
@@ -137,7 +138,7 @@ function gonorth_the_hook_form_alter(&$form, &$form_state, $form_id) {
           drupal_set_title('เขียนบันทึกการเดินทาง');
         }
         elseif ($form_id == 'travel_plan_node_form') {
-          drupal_set_title('วางเส้นทาง');
+          drupal_set_title('ออกแบบเส้นทาง');
         }
         // Change 'Add another item' button for Day Plan.
         $form['field_day_plan']['field_day_plan_add_more']['#value'] = 'เพิ่มวันเดินทาง';
