@@ -17,16 +17,19 @@ jQuery(document).ready(function(){
     var buddy_str = fb_startup_kit && fb_startup_kit.buddies_str;
     var buddies_list = buddy_str && buddy_str.split(", ") || [],
         i = 0;
+    var api_key = fb_startup_kit && Object.prototype.toString.apply(fb_startup_kit.apikey) === "[object Array]" ? fb_startup_kit.apikey[0]: fb_startup_kit.apikey;
     FB.init({
-      appId  : Drupal.settings.fb_startup_kit && Drupal.settings.fb_startup_kit.apikey || '246345852043389',
+      appId  : api_key || '246345852043389',
       status : true, // check login status
       cookie : true, // enable cookies to allow the server to access the session
-      xfbml  : true  // parse XFBML
+      xfbml  : true,  // parse XFBML
+      channel: 'http://www.gonorththailand.com/sites/all/static/page/fb_channel.php'
     });
 
     // Empty buddies list is node_form.
     if (buddies_list.length === 0) {
       init();
+      //login();
     }
     // Have buddies list is from views.
     else {
