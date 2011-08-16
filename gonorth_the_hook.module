@@ -119,6 +119,7 @@ function gonorth_the_hook_form_alter(&$form, &$form_state, $form_id) {
         drupal_add_js($mpath . '/js/day_plan.js');
         // Add facebook friends selector to node.
         if ($form_id == 'travel_log_node_form') {
+          $form['#after_build'][] = 'gonorth_friend_after_build';
           $_SESSION['gonorth_profile_come_from'] = 'travel_log';
           $api_key = variable_get('facebook_startup_kit_app_api_key', '');
           drupal_add_js($mpath . '/js/jquery.facebook.multifriend.select.js');
@@ -414,3 +415,25 @@ QUERY;
 
   return $query;
 }
+function gonorth_friend_after_build($form, $form_state) {
+  $mpath = drupal_get_path('module', 'gonorth_the_hook');
+  drupal_add_js($mpath . '/js/day_plan.js');
+  $_SESSION['gonorth_profile_come_from'] = 'travel_log';
+  $api_key = variable_get('facebook_startup_kit_app_api_key', '');
+  drupal_add_js($mpath . '/js/jquery.facebook.multifriend.select.js');
+  drupal_add_css($mpath . '/css/jquery.facebook.multifriend.select.css');
+  drupal_add_js($mpath . '/js/add_travel_log.js');
+  drupal_add_js(array('fb_startup_kit' => array('apikey'  => $api_key)), 'setting');
+  $form['multi_friend_select'] = array(
+    '#value' => '
+      <div id="facebook-multifriends-selectoin">
+          <div id="selected-friends-lable">เพื่อนร่วมทาง: </div>
+          <div id="selected-friends" style="height:30px"></div>
+          <div id="jfmfs-container"></div>
+      </div>',
+    '#weight' => -1.9,
+  );
+  drupal_set_title('เขียนบันทึกการเดินทาง');
+  return $form;
+}
+
